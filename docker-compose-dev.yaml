@@ -1,0 +1,117 @@
+version: '3'
+
+
+services:
+
+  cordinador:
+    container_name: cordinador
+    build: cord/
+    entrypoint: python3 /main.py
+    environment:
+      - SERVER_IP=cordinador_ip
+      - SERVER_PORT=12345
+      - NUM_NODES=2
+    networks:
+      - testing_net
+
+
+  tester:
+    container_name: tester
+    build: tester/
+    entrypoint: python3 /main.py
+    environment:
+      - SERVER_PORT=12345
+      - COR_IP=cordinador
+      - COR_PORT=12345
+      - NUM_NODES=2
+    networks:
+      - testing_net
+    depends_on:
+      - cordinador
+
+  sidecard1:
+    container_name: sc1
+    build: sidecard/
+    entrypoint: python3 /main.py
+    environment:
+      - SC_ID=1
+      - TEST_IP=tester
+      - TEST_PORT=12345
+      - PORT=10000
+    networks:
+      - testing_net
+    volumes:
+      - myvolume:/data1
+    depends_on:
+      - tester
+
+  sidecard2:
+    container_name: sc2
+    build: sidecard/
+    entrypoint: python3 /main.py
+    environment:
+      - SC_ID=2
+      - TEST_IP=tester
+      - TEST_PORT=12345
+      - PORT=10000
+    networks:
+      - testing_net
+    volumes:
+      - myvolume:/data1
+    depends_on:
+      - tester
+
+  slave1:
+    container_name: slave1
+    build: slave
+    entrypoint: python3 /main.py
+    environment:
+      - SL_ID=1
+      - COR_IP=cordinador
+      - COR_PORT=12345
+      - PORT=10000
+      - MONITOR_IP=monitor 
+      - MONITOR_PORT=10000 
+    networks:
+      - testing_net
+    depends_on:
+      - cordinador
+
+  slave2:
+    container_name: slave2
+    build: slave
+    entrypoint: python3 /main.py
+    environment:
+      - SL_ID=1
+      - COR_IP=cordinador
+      - COR_PORT=12345
+      - PORT=10000
+      - MONITOR_IP=monitor 
+      - MONITOR_PORT=10000 
+    networks:
+      - testing_net
+    depends_on:
+      - cordinador
+
+  monitor:
+    container_name: monitor
+    build: monitor
+    entrypoint: python3 /main.py
+    environment:
+      - PORT=10000
+    networks:
+      - testing_net
+    depends_on:
+      - cordinador
+
+
+networks:
+  testing_net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.25.125.0/24
+
+volumes:
+  myvolume:
+    external: true
