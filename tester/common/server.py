@@ -17,6 +17,7 @@ number_sidecards = 2
 new_sc_code = "ns"
 get_bu_code = "gb"
 stop_bu_code = "st"
+done_op_code = "dn"
 
 def _recv_until(socket,delimiter):
     return "not implemented"
@@ -52,15 +53,19 @@ class Server:
         
         time.sleep(3)
         self._send_req((self._cord_ip,self._cord_port),
-            (new_sc_code+self._sc_dic["1"]+","+str(sc_port)+","+"00005"+","+"data1"))
+            (new_sc_code+self._sc_dic["1"]+","+str(sc_port)+","+"00001"+","+"data1"))
            
+      
         self._send_req((self._cord_ip,self._cord_port),
-            (new_sc_code+self._sc_dic["2"]+","+str(sc_port)+","+"00005"+","+"data1"))
+            (new_sc_code+self._sc_dic["2"]+","+str(sc_port)+","+"00001"+","+"data1"))
            
-        time.sleep(10)
+      
+        for i in range(0,12):
+            time.sleep(10)
 
-        self._send_req((self._sc_dic["1"],sc_port),
-            ("md"+"data1"))
+            self._send_req((self._sc_dic["1"],sc_port),
+                ("md"+"data1"))
+
 
         time.sleep(10)
 
@@ -70,10 +75,14 @@ class Server:
 
         time.sleep(10)
 
+
         self._send_req((self._cord_ip,self._cord_port),
             (stop_bu_code+self._sc_dic["1"]+","+"data1"))
 
-        
+        self._send_req((self._cord_ip,self._cord_port),
+            done_op_code)
+
+
     def __handle_client_connection(self, client_sock,num_links):
         """
         Read message from a specific client socket and closes the socket

@@ -10,7 +10,6 @@ sc_port = 10000
 sl_port = 10000
 sidecard_op_code = "sc"
 slave_op_code = "sl"
-
 number_sidecards = 2
 number_slaves = 2
 
@@ -18,6 +17,7 @@ number_slaves = 2
 new_sc_code = "ns"
 get_bu_code = "gb"
 stop_bu_code = "st"
+done_op_code = "dn"
 
 def _recv_until(socket,delimiter):
     return "not implemented"
@@ -45,14 +45,17 @@ class Server:
         # the server
         num_links = 0 # num_sc,num_sl
         next_slave_turn = 0
+        done = "no"
         while (num_links != number_slaves):
             client_sock = self.__accept_new_connection()
             num_links = self.__handle_client_connection_1(client_sock,num_links,next_slave_turn)
         
-        while True:
+        while done != "done":
             client_sock = self.__accept_new_connection()
-            self.__handle_client_connection_2(client_sock,num_links,next_slave_turn)
+            done = self.__handle_client_connection_2(client_sock,num_links,next_slave_turn)
 
+        for key in self._sl_dic:
+            self._close_slave(key)
 
     def __handle_client_connection_1(self, client_sock,num_links,next_slave_turn):
         """
@@ -79,6 +82,8 @@ class Server:
             logging.info("Error while reading socket {}, {}".format(client_sock,e))
         finally:
             client_sock.close()
+
+
     def __handle_client_connection_2(self, client_sock,num_links,next_slave_turn):
         """
         Read message from a specific client socket and closes the socket
@@ -86,40 +91,64 @@ class Server:
         If a problem arises in the communication with the client, the
         client socket will also be closed
         """
-
         try:
             code = client_sock.recv(op_code_size).decode()
             logging.info(
                 'Message received from connection {}. Msg: {}'
                     .format(client_sock.getpeername(), code))
             splited = 0
+
+
             if (code == stop_bu_code or code == new_sc_code or code == get_bu_code):
-                next_slave_turn = ((next_slave_turn)%num_links) + 1
                 msg = client_sock.recv(1024)
                 splited = msg.decode().split(",")
+
+
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    logging.info(
-                        'sending to {}.'
-                            .format((self._sl_dic[str(next_slave_turn)],sl_port)))
-                    s.connect((self._sl_dic[str(next_slave_turn)],sl_port))
-                    s.sendall(code.encode())
-                    s.sendall(msg)
+                    
                     if(code == get_bu_code):
+
+                        ip = splited[0]
+                        path = splited[1]
+                        responsible_slave_id = self._slsc_dic[(ip,path)]
+                        logging.info(
+                            'sending to {}.'
+                                .format(responsible_slave_id))
+
+                        s.connect((self._sl_dic[str(responsible_slave_id)],sl_port))
+                        s.sendall(code.encode())
+                        s.sendall(msg)
                         client_sock.sendall(s.recv(2000))
-                    s.shutdown(socket.SHUT_RDWR)
-                if(code == new_sc_code):
-                    ip = splited[0]
-                    port = int(splited[1])
-                    interval = int(splited[2])
-                    path = splited[3]
-                    self._slsc_dic[(ip,path)] = str(next_slave_turn)
-                if(code == stop_bu_code):
-                    ip = splited[0]
-                    path = splited[1]
-                    try:
-                        del self._slsc_dic[(ip,path)]
-                    except Error:
-                        pass
+                        s.shutdown(socket.SHUT_RDWR)
+
+                    if(code == new_sc_code):
+                        next_slave_turn = ((next_slave_turn)%num_links) + 1
+
+                        s.connect((self._sl_dic[str(next_slave_turn)],sl_port))
+                        s.sendall(code.encode())
+                        s.sendall(msg)
+
+                        ip = splited[0]
+                        port = int(splited[1])
+                        interval = int(splited[2])
+                        path = splited[3]
+                        self._slsc_dic[(ip,path)] = str(next_slave_turn)
+
+                    if(code == stop_bu_code):
+                        ip = splited[0]
+                        path = splited[1]
+                        responsible_slave_id = self._slsc_dic[(ip,path)]
+                        s.connect((self._sl_dic[str(responsible_slave_id)],sl_port))
+                        s.sendall(code.encode())
+                        s.sendall(msg)
+                        
+                        try:
+                            del self._slsc_dic[(ip,path)]
+                        except Error:
+                            pass
+
+            if(code == done_op_code):
+                return "done"
 
         except OSError as e:
             logging.info("Error while reading socket {}, {}".format(client_sock,e))
@@ -140,3 +169,8 @@ class Server:
         c, addr = self._server_socket.accept()
         logging.info('Got connection from {}'.format(addr))
         return c
+
+    def _close_slave(self,key):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self._sl_dic[key],sl_port))
+            s.sendall(done_op_code.encode())

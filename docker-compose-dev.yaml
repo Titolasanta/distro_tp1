@@ -82,7 +82,7 @@ services:
     build: slave
     entrypoint: python3 /main.py
     environment:
-      - SL_ID=1
+      - SL_ID=2
       - COR_IP=cordinador
       - COR_PORT=12345
       - PORT=10000
